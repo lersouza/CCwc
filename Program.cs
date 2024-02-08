@@ -3,6 +3,7 @@
 using System;
 using System.CommandLine;
 using System.IO;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
 /// <summary>
@@ -40,6 +41,23 @@ class Program
         /// The number of words in the file.
         /// </summary>
         public int WordCount { get; set; }
+    }
+
+
+    /// <summary>
+    /// A holder to the stream to be processed (file or standard input).
+    /// </summary>
+    private struct StreamReference
+    {
+        /// <summary>
+        /// The name for reference.
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// The actual stream to read.
+        /// </summary>
+        public Stream Stream { get; set; }
     }
 
 
@@ -115,10 +133,26 @@ class Program
 
         rootCommand.SetHandler((bytesOptionValue, linesOptionValue, wordsOptionValue, charOptionValue, file) =>
         {
-            var fileStats = ComputeStats(file, bytesOptionValue, linesOptionValue, wordsOptionValue, charOptionValue);
+            var streamRef = CreateStreamReference(file);
+            var fileStats = ComputeStats(streamRef, bytesOptionValue, linesOptionValue, wordsOptionValue, charOptionValue);
+
             PrintStats(fileStats, bytesOptionValue, linesOptionValue, wordsOptionValue, charOptionValue);
         }, bytesOption, linesOption, wordsOption, charOption, fileArgument);
         return rootCommand;
+    }
+
+    /// <summary>
+    /// Creates a refrence to the stream that should be processed.
+    /// </summary>
+    /// <param name="file">The file provided as input by the user.</param>
+    /// <returns></returns>
+    private static StreamReference CreateStreamReference(FileInfo file)
+    {
+        if(file == null)
+        {
+            return new StreamReference { Name = "", Stream = Console.OpenStandardInput() };
+        }
+        return new StreamReference { Name = file.ToString(), Stream = file.OpenRead() };
     }
 
     /// <summary>
@@ -170,21 +204,21 @@ class Program
     /// 
     /// Another approach would be to use the <see cref="System.IO.StreamReader"/> to get a string directly and use regular expressions to compute the # of words, for instance.
     /// </remarks>
-    /// <param name="file">The file to compute stats for.</param>
+    /// <param name="streamRef">A reference to the stream to be processed. This could be either a file or the standard input.</param>
     /// <param name="countBytes">Indicates whether or not to compute the number of bytes.</param>
     /// <param name="countLines">Indicates whether or not to compute the number of lines.</param>
     /// <param name="countWords">Indicates whether or not to compute the number of words.</param>
     /// <param name="countChars">Indicates whether or not to compute the number of Characters.</param>
     /// <returns></returns>
-    private static FileStats ComputeStats(FileInfo file, bool countBytes, bool countLines, bool countWords, bool countChars)
+    private static FileStats ComputeStats(StreamReference streamRef, bool countBytes, bool countLines, bool countWords, bool countChars)
     {
         var needsDecoding = countChars | countWords | countLines;
 
         var buffer = new byte[BufferSize];
         var decoder = GetDecoder();
-        var stats = new FileStats { File = file?.ToString() ??  ""};
+        var stats = new FileStats { File = streamRef.Name };
 
-        using (Stream fs = file?.OpenRead() ?? Console.OpenStandardInput())
+        using (Stream fs = streamRef.Stream)
         {
             var bytesRead = fs.Read(buffer, 0, BufferSize);
             var inWord = false;
