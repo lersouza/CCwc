@@ -17,9 +17,9 @@ class Program
     private struct FileStats
     {
         /// <summary>
-        /// The file reference.
+        /// The file name requested.
         /// </summary>
-        public FileInfo File { get; set; }
+        public string File { get; set; }
 
         /// <summary>
         /// The number of Bytes in the file.
@@ -68,10 +68,18 @@ class Program
     private static RootCommand BuildCommandDef()
     {
         var fileArgument = new Argument<FileInfo>(
-                    name: "file",
-                    description: "The file to process"
-                );
+            name: "file",
+            description: "The file to process. If no file is specified, the standard input will be used."
+        );
 
+        fileArgument.SetDefaultValue(null); // Allow the user to provide standard input
+        fileArgument.AddValidator(result => {
+            if(result.GetValueForArgument(fileArgument) == null && !Console.IsInputRedirected)
+            {
+                result.ErrorMessage = "You must either provide a file or redirect the standard input for computation.";
+            }
+        });
+        
         var bytesOption = new Option<bool>(
             name: "-c",
             description: "The number of bytes in each input file is written to the standard output.  This will cancel out any prior usage of the -m option.",
@@ -104,7 +112,6 @@ class Program
         rootCommand.AddOption(linesOption);
         rootCommand.AddOption(wordsOption);
         rootCommand.AddOption(charOption);
-
 
         rootCommand.SetHandler((bytesOptionValue, linesOptionValue, wordsOptionValue, charOptionValue, file) =>
         {
@@ -175,9 +182,9 @@ class Program
 
         var buffer = new byte[BufferSize];
         var decoder = GetDecoder();
-        var stats = new FileStats { File = file };
+        var stats = new FileStats { File = file?.ToString() ??  ""};
 
-        using (FileStream fs = file.OpenRead())
+        using (Stream fs = file?.OpenRead() ?? Console.OpenStandardInput())
         {
             var bytesRead = fs.Read(buffer, 0, BufferSize);
             var inWord = false;
